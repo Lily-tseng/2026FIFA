@@ -144,21 +144,20 @@
             }
         }
 
-        // 🛠️ 威力加強版：完美解析中文「2026年6月12日 上午 3:00」並自動精算星期幾
+        // 🛠️ 終極無敵時間相容格式化工具（通殺中文字串與 ISO 國際格式）
         function formatChineseDateTimeWithWeek(rawTime) {
             if (!rawTime) return "未定時間";
             
             let dateObj = new Date(rawTime);
             let timeStr = String(rawTime).trim();
 
-            // 針對強大的中文格式進行正規表達式深度解析
-            if (isNaN(dateObj.getTime()) || timeStr.includes('年')) {
+            // 如果是包含「年」的中文字串，使用自訂拆解
+            if (timeStr.includes('年')) {
                 try {
-                    // 利用正規表達式抓取：年、月、日、(上午/下午)、時、分
                     const match = timeStr.match(/(\d+)年\s*(\d+)月\s*(\d+)日\s*(上午|下午)?\s*(\d+):(\d+)/);
                     if (match) {
                         const year = parseInt(match[1]);
-                        const month = parseInt(match[2]) - 1; // JS 月份由 0 開始
+                        const month = parseInt(match[2]) - 1;
                         const day = parseInt(match[3]);
                         const ampm = match[4];
                         let hour = parseInt(match[5]);
@@ -170,9 +169,176 @@
                         dateObj = new Date(year, month, day, hour, minute);
                     }
                 } catch (e) {
-                    console.error("中文時間解析微調出錯：", e);
+                    console.error("解析手打中文格式出錯：", e);
                 }
             }
 
-            // 萬一完全無法辨識（例如填寫了純文字「待定」），就原樣亮輸出
-            if (isNaN(
+            // 如果還是無法辨識，或者它是一串純文字且不是時間
+            if (isNaN(dateObj.getTime())) {
+                return rawTime; 
+            }
+
+            // 成功取得正確日期物件後，一律輸出完美的曾家專屬中文格式
+            const yyyy = dateObj.getFullYear();
+            const mm = dateObj.getMonth() + 1;
+            const dd = dateObj.getDate();
+            let hh = dateObj.getHours();
+            const min = String(dateObj.getMinutes()).padStart(2, '0');
+
+            // 👑 計算星期幾
+            const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
+            const dayOfWeek = weekDays[dateObj.getDay()];
+
+            // 重新判定上午與下午
+            const ampmText = hh >= 12 ? "下午" : "上午";
+            hh = hh % 12;
+            hh = hh ? hh : 12; 
+
+            return `${yyyy}年${mm}月${dd}日 (${dayOfWeek}) ${ampmText} ${hh}:${min}`;
+        }
+
+        function renderMatches() {
+            const currentUser = document.getElementById('userSelect').value;
+            const container = document.getElementById('matchList');
+            container.innerHTML = '';
+
+            if (!currentUser) return; 
+
+            if(matches.length === 0) {
+                container.innerHTML = "<p class='text-center text-slate-400 text-sm'>試算表內尚無賽程資料</p>";
+                return;
+            }
+
+            let displayMatches = [...matches];
+
+            if (currentStage !== '全部') {
+                displayMatches = displayMatches.filter(m => m.stage === currentStage);
+            }
+
+            if (currentTab === 'latest') {
+                if (displayMatches.length > 10) {
+                    displayMatches = displayMatches.slice(-10);
+                }
+            }
+
+            if (displayMatches.length === 0) {
+                container.innerHTML = `<p class='text-center text-slate-400 text-sm py-4'>此階段尚無相關賽程</p>`;
+                return;
+            }
+
+            displayMatches.forEach(match => {
+                const myPred = predictions[currentUser] ? predictions[currentUser][match.id] : null;
+                let statusBadge = "";
+                
+                const hasScore = (match.homeScore !== undefined && match.homeScore !== "" && match.awayScore !== undefined && match.awayScore !== "");
+
+                if (match.result !== 0 && match.result !== "") {
+                    const isCorrect = (myPred == match.result);
+                    statusBadge = isCorrect 
+                        ? `<span class="text-green-600 text-xs font-bold">✅ 猜中！</span>`
+                        : `<span class="text-red-500 text-xs font-bold">❌ 沒中</span>`;
+                }
+
+                let middleAreaHtml = "";
+                if (hasScore) {
+                    const isDrawSelected = (myPred == 3);
+                    middleAreaHtml = `
+                        <div class="flex flex-col items-center justify-center px-2">
+                            <span class="text-sm font-extrabold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 shadow-inner">
+                                ${match.homeScore} - ${match.awayScore}
+                            </span>
+                            <span class="text-[10px] mt-1 font-bold ${isDrawSelected ? 'text-slate-500 underline' : 'text-slate-300'}">投和</span>
+                        </div>
+                    `;
+                } else {
+                    middleAreaHtml = `
+                        <button onclick="savePredCloud('${match.id}', 3)" class="py-2 px-3 text-sm rounded-lg font-bold border ${myPred == 3 ? 'bg-slate-500 border-slate-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">和</button>
+                    `;
+                }
+
+                const formattedTime = formatChineseDateTimeWithWeek(match.time);
+
+                const card = document.createElement('div');
+                card.className = "p-3.5 border border-slate-200 rounded-xl bg-white shadow-sm";
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded">${match.stage || '小組賽'}</span>
+                        <span class="text-[11px] text-slate-400 font-medium">場次 ${match.id} | ${formattedTime}</span>
+                        ${statusBadge}
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <button onclick="savePredCloud('${match.id}', 1)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border ${myPred == 1 ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.home}</button>
+                        ${middleAreaHtml}
+                        <button onclick="savePredCloud('${match.id}', 2)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border ${myPred == 2 ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.away}</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function savePredCloud(matchId, choice) {
+            const currentUser = document.getElementById('userSelect').value;
+            
+            const isConfirmed = confirm(`❓ 確定要以【 ${currentUser} 】的身分進行預測嗎？\n(如果這不是你的名字，請點取消並重新選擇「我是誰」)`);
+            if (!isConfirmed) return;
+
+            showLoading(true);
+            try {
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ user: currentUser, matchId: matchId, choice: choice })
+                });
+                if (!predictions[currentUser]) predictions[currentUser] = {};
+                predictions[currentUser][matchId] = choice;
+                renderMatches();
+                calculateScores();
+            } catch (error) {
+                alert("儲存至雲端失敗，請重試！");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function switchUser() { renderMatches(); }
+
+        function calculateScores() {
+            const leaderboardContainer = document.getElementById('leaderboard');
+            leaderboardContainer.innerHTML = '';
+            
+            const scores = users.map(user => {
+                let score = 0;
+                matches.forEach(match => {
+                    const userPred = predictions[user] ? predictions[user][match.id] : null;
+                    if (match.result !== 0 && match.result !== "" && Number(userPred) === Number(match.result)) {
+                        score++;
+                    }
+                });
+                return { name: user, score: score };
+            });
+
+            scores.sort((a, b) => b.score - a.score);
+
+            scores.forEach((s, index) => {
+                let rankBadge = `#${index + 1}`;
+                if (index === 0) rankBadge = "🥇";
+                if (index === 1) rankBadge = "🥈";
+                if (index === 2) rankBadge = "🥉";
+
+                const row = document.createElement('div');
+                row.className = `flex justify-between items-center text-sm p-1 rounded ${index === 0 ? 'bg-amber-50/50' : ''}`;
+                row.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="w-6 h-6 flex items-center justify-center text-xs font-bold text-slate-500">${rankBadge}</span>
+                        <span class="font-bold ${index === 0 ? 'text-amber-700' : 'text-slate-700'}">${s.name}</span>
+                    </div>
+                    <span class="${index === 0 ? 'text-amber-600' : 'text-blue-600'} font-bold">${s.score} 分</span>
+                `;
+                leaderboardContainer.appendChild(row);
+            });
+        }
+
+        initUserSelect();
+        loadCloudData();
+    </script>
+</body>
+</html>
