@@ -6,10 +6,20 @@
     <title>世足好友雲端預測王</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
-    <style>
+<style>
         body { font-family: 'Noto Sans TC', sans-serif; }
-    </style>
-</head>
+        /* 隱藏捲軸並強制啟用手機流暢滑動功能 */
+        .no-scrollbar::-webkit-scrollbar { 
+            display: none; 
+        }
+        .no-scrollbar { 
+            -ms-overflow-style: none; 
+            scrollbar-width: none; 
+            overflow-x: auto !important; /* 強制允許橫向溢出 */
+            display: flex;               /* 確保按鈕橫向排列 */
+            -webkit-overflow-scrolling: touch; /* 讓手機滑動變得極度流暢不卡頓 */
+        }
+    </style></head>
 <body class="bg-slate-100 min-h-screen p-4 text-slate-800">
 
     <div id="loadingOverlay" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 text-white font-bold text-lg">
@@ -29,14 +39,27 @@
             </select>
         </div>
 
-        <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-                <div class="w-1 h-5 bg-blue-600 rounded-full"></div>
-                <h2 class="text-lg font-bold">賽程預測</h2>
+        <div class="mb-4">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-1 h-5 bg-blue-600 rounded-full"></div>
+                    <h2 class="text-lg font-bold">賽程預測</h2>
+                </div>
+                <div class="flex bg-slate-200 p-0.5 rounded-lg text-xs font-bold">
+                    <button id="tabLatest" onclick="switchTab('latest')" class="px-2.5 py-1.5 rounded-md bg-white text-blue-600 shadow-sm">最新 10 場</button>
+                    <button id="tabAll" onclick="switchTab('all')" class="px-2.5 py-1.5 rounded-md text-slate-600">全部賽程</button>
+                </div>
             </div>
-            <div class="flex bg-slate-200 p-0.5 rounded-lg text-xs font-bold">
-                <button id="tabLatest" onclick="switchTab('latest')" class="px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm">最新 10 場</button>
-                <button id="tabAll" onclick="switchTab('all')" class="px-3 py-1.5 rounded-md text-slate-600">全部歷史</button>
+
+            <div id="stageButtons" class="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-bold text-xs">
+                <button onclick="switchStage('全部')" class="stage-btn shrink-0 px-3 py-2 rounded-full bg-blue-600 text-white shadow-sm">全部</button>
+                <button onclick="switchStage('小組賽')" class="stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">小組賽</button>
+                <button onclick="switchStage('32強')" class="stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">32強</button>
+                <button onclick="switchStage('16強')" class="stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">16強</button>
+                <button onclick="switchStage('8強')" class="stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">8強</button>
+                <button onclick="switchStage('準決賽')" class="stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">準決賽</button>
+                <button onclick="switchStage('季軍戰')" class="stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">季軍戰</button>
+                <button onclick="switchStage('決賽')" class="stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">決賽</button>
             </div>
         </div>
         
@@ -64,25 +87,32 @@
 
         let matches = [];
         let predictions = {};
-        let currentTab = 'latest'; // 紀錄當前分頁：'latest' 或 'all'
+        let currentTab = 'latest';  // 'latest' 或 'all'
+        let currentStage = '全部'; // '全部', '小組賽', '16強' ...
 
         function showLoading(show) {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
 
-        // 切換分頁標籤
+        // 切換範圍分頁 (最新10場 / 全部)
         function switchTab(tab) {
             currentTab = tab;
-            const tabLatest = document.getElementById('tabLatest');
-            const tabAll = document.getElementById('tabAll');
-            
-            if (tab === 'latest') {
-                tabLatest.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm";
-                tabAll.className = "px-3 py-1.5 rounded-md text-slate-600";
-            } else {
-                tabLatest.className = "px-3 py-1.5 rounded-md text-slate-600";
-                tabAll.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm";
-            }
+            document.getElementById('tabLatest').className = tab === 'latest' ? "px-2.5 py-1.5 rounded-md bg-white text-blue-600 shadow-sm" : "px-2.5 py-1.5 rounded-md text-slate-600";
+            document.getElementById('tabAll').className = tab === 'all' ? "px-2.5 py-1.5 rounded-md bg-white text-blue-600 shadow-sm" : "px-2.5 py-1.5 rounded-md text-slate-600";
+            renderMatches();
+        }
+
+        // 切換賽制階段 (小組賽 / 16強 / 決賽等)
+        function switchStage(stage) {
+            currentStage = stage;
+            const buttons = document.querySelectorAll('.stage-btn');
+            buttons.forEach(btn => {
+                if (btn.innerText === stage) {
+                    btn.className = "stage-btn shrink-0 px-3 py-2 rounded-full bg-blue-600 text-white shadow-sm";
+                } else {
+                    btn.className = "stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200";
+                }
+            });
             renderMatches();
         }
 
@@ -127,14 +157,24 @@
                 return;
             }
 
-            // 根據分頁決定要顯示哪些比賽
+            // 🔍 【雙重過濾核心邏輯】
             let displayMatches = [...matches];
+
+            // 1. 先過濾賽制階段 (試算表內多增加的第 6 個欄位)
+            if (currentStage !== '全部') {
+                displayMatches = displayMatches.filter(m => m.stage === currentStage);
+            }
+
+            // 2. 如果是選「最新10場」，在經過賽制過濾後，只切出最後10筆
             if (currentTab === 'latest') {
-                // 自動篩選出「最新 10 場」：這裡邏輯是取整份賽程的最後 10 筆（最新增加的場次）
-                // 如果你想改為「只看未開賽的」，也可以改為篩選未開賽。目前採用的是顯示最後 10 場。
                 if (displayMatches.length > 10) {
                     displayMatches = displayMatches.slice(-10);
                 }
+            }
+
+            if (displayMatches.length === 0) {
+                container.innerHTML = `<p class='text-center text-slate-400 text-sm py-4'>此階段尚無相關賽程</p>`;
+                return;
             }
 
             displayMatches.forEach(match => {
@@ -151,6 +191,7 @@
                 card.className = "p-3.5 border border-slate-200 rounded-xl bg-white shadow-sm";
                 card.innerHTML = `
                     <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded">${match.stage || '小組賽'}</span>
                         <span class="text-xs text-slate-400">場次 ${match.id} | ${match.time}</span>
                         ${statusBadge}
                     </div>
@@ -164,7 +205,7 @@
             });
         }
 
-        // 把預測即時傳送儲存回 Google 試算表（內含30分鐘截止防作弊機制）
+        // 儲存預測（內含開賽 30 分鐘截止機制）
         async function savePredCloud(matchId, choice) {
             const currentUser = document.getElementById('userSelect').value;
             const currentMatch = matches.find(m => m.id == matchId);
@@ -174,7 +215,6 @@
                 const currentYear = now.getFullYear();
                 const matchTimeStr = `${currentYear}/${currentMatch.time}`;
                 const matchDate = new Date(matchTimeStr);
-                // 截止時間為比賽開始時間 + 30 分鐘
                 const deadlineDate = new Date(matchDate.getTime() + 30 * 60 * 1000);
                 
                 if (now >= deadlineDate) {
@@ -189,7 +229,6 @@
                     method: 'POST',
                     body: JSON.stringify({ user: currentUser, matchId: matchId, choice: choice })
                 });
-                
                 if (!predictions[currentUser]) predictions[currentUser] = {};
                 predictions[currentUser][matchId] = choice;
                 renderMatches();
@@ -201,14 +240,11 @@
             }
         }
 
-        function switchUser() {
-            renderMatches();
-        }
+        function switchUser() { renderMatches(); }
 
         function calculateScores() {
             const leaderboardContainer = document.getElementById('leaderboard');
             leaderboardContainer.innerHTML = '';
-
             const scores = users.map(user => {
                 let score = 0;
                 matches.forEach(match => {
@@ -219,9 +255,7 @@
                 });
                 return { name: user, score: score };
             });
-
             scores.sort((a, b) => b.score - a.score);
-
             scores.forEach((s, index) => {
                 const row = document.createElement('div');
                 row.className = "flex justify-between items-center text-sm";
@@ -236,7 +270,6 @@
             });
         }
 
-        // 頁面初始化
         initUserSelect();
         loadCloudData();
     </script>
