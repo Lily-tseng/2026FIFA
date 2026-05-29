@@ -68,7 +68,7 @@
 
         <div class="flex items-center gap-2 mb-3">
             <div class="w-1 h-5 bg-amber-500 rounded-full"></div>
-            <h2 class="text-lg font-bold">目前雲端積分榜</h2>
+            <h2 class="text-lg font-bold">目前雲端積分榜 (由高到低)</h2>
         </div>
         <div id="leaderboard" class="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3"></div>
 
@@ -138,7 +138,7 @@
             }
         }
 
-        // 修正後的選單初始化：加入強制預設選取，防堵讀取時抓到空值
+        // 選單初始化
         function initUserSelect() {
             const select = document.getElementById('userSelect');
             select.innerHTML = ''; 
@@ -148,7 +148,7 @@
                 select.appendChild(opt);
             });
             if(users.length > 0) {
-                select.value = users[0]; // 強制指定預設選中名單第一個（曾爸）
+                select.value = users[0];
             }
         }
 
@@ -157,7 +157,6 @@
             const container = document.getElementById('matchList');
             container.innerHTML = '';
 
-            // 防呆：萬一選單真的還是抓到空字串，先攔截不報錯
             if (!currentUser) return; 
 
             if(matches.length === 0) {
@@ -165,15 +164,12 @@
                 return;
             }
 
-            // 🔍 【雙重過濾核心邏輯】
             let displayMatches = [...matches];
 
-            // 1. 先過濾賽制階段
             if (currentStage !== '全部') {
                 displayMatches = displayMatches.filter(m => m.stage === currentStage);
             }
 
-            // 2. 如果是選「最新10場」，只切出最後10筆
             if (currentTab === 'latest') {
                 if (displayMatches.length > 10) {
                     displayMatches = displayMatches.slice(-10);
@@ -213,7 +209,7 @@
             });
         }
 
-        // 儲存預測（內含開賽 30 分鐘截止機制）
+        // 儲存預測
         async function savePredCloud(matchId, choice) {
             const currentUser = document.getElementById('userSelect').value;
             const currentMatch = matches.find(m => m.id == matchId);
@@ -240,7 +236,7 @@
                 if (!predictions[currentUser]) predictions[currentUser] = {};
                 predictions[currentUser][matchId] = choice;
                 renderMatches();
-                calculateScores();
+                calculateScores(); // 這裡會同步觸發高低排序
             } catch (error) {
                 alert("儲存至雲端失敗，請重試！");
             } finally {
@@ -250,35 +246,46 @@
 
         function switchUser() { renderMatches(); }
 
+        // 🛠️ 優化後的積分榜功能：強制轉型為數字，保證「由高到低」精準排列
         function calculateScores() {
             const leaderboardContainer = document.getElementById('leaderboard');
             leaderboardContainer.innerHTML = '';
+            
             const scores = users.map(user => {
                 let score = 0;
                 matches.forEach(match => {
                     const userPred = predictions[user] ? predictions[user][match.id] : null;
-                    if (match.result !== 0 && match.result !== "" && userPred == match.result) {
+                    // 強制將試算表傳過來的結果轉為數字比對，避免純文字導致比對失敗
+                    if (match.result !== 0 && match.result !== "" && Number(userPred) === Number(match.result)) {
                         score++;
                     }
                 });
                 return { name: user, score: score };
             });
+
+            // 👑 關鍵：由大到小純數字排序
             scores.sort((a, b) => b.score - a.score);
+
             scores.forEach((s, index) => {
+                // 為前三名加上不同的小皇冠/獎牌視覺效果，看起來更直觀刺激！
+                let rankBadge = `#${index + 1}`;
+                if (index === 0) rankBadge = "🥇";
+                if (index === 1) rankBadge = "🥈";
+                if (index === 2) rankBadge = "🥉";
+
                 const row = document.createElement('div');
-                row.className = "flex justify-between items-center text-sm";
+                row.className = `flex justify-between items-center text-sm p-1 rounded ${index === 0 ? 'bg-amber-50/50' : ''}`;
                 row.innerHTML = `
                     <div class="flex items-center gap-2">
-                        <span class="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-xs font-bold text-slate-500">#${index + 1}</span>
-                        <span class="font-bold text-slate-700">${s.name}</span>
+                        <span class="w-6 h-6 flex items-center justify-center text-xs font-bold text-slate-500">${rankBadge}</span>
+                        <span class="font-bold ${index === 0 ? 'text-amber-700' : 'text-slate-700'}">${s.name}</span>
                     </div>
-                    <span class="text-blue-600 font-bold">${s.score} 分</span>
+                    <span class="${index === 0 ? 'text-amber-600' : 'text-blue-600'} font-bold">${s.score} 分</span>
                 `;
                 leaderboardContainer.appendChild(row);
             });
         }
 
-        // 啟動順序
         initUserSelect();
         loadCloudData();
     </script>
