@@ -144,31 +144,56 @@
             }
         }
 
-        // 🛠️ 精準解析與美化日期時間的防錯工具
-        function formatChineseDateTime(rawTime) {
+        // 🛠️ 專為中文輸入設計的「自動星期推算與格式化工具」
+        function formatChineseDateTimeWithWeek(rawTime) {
             if (!rawTime) return "未定時間";
             
-            // 如果原本就是中文格式，直接返回，不再重複處理
-            if (String(rawTime).includes('年') && String(rawTime).includes('日')) {
-                return rawTime;
-            }
-
-            const dateObj = new Date(rawTime);
+            // 嘗試將試算表傳過來的資料轉成 JavaScript 的日期物件
+            let dateObj = new Date(rawTime);
             
-            // 萬一 Google 傳過來的格式讓 JavaScript 認不出來，就直接亮出原本填寫的文字
+            // 處理中文「上午/下午」的相容性問題
             if (isNaN(dateObj.getTime())) {
-                return rawTime;
+                let cleanTime = String(rawTime);
+                if (cleanTime.includes('上午') || cleanTime.includes('下午')) {
+                    // 為了防錯，先嘗試替換成標準格式做解析
+                    cleanTime = cleanTime.replace('年', '/').replace('月', '/').replace('日', '');
+                    const isPM = cleanTime.includes('下午');
+                    cleanTime = cleanTime.replace('上午', '').replace('下午', '').trim();
+                    
+                    const parts = cleanTime.split(' ');
+                    if(parts.length === 2) {
+                        const timeParts = parts[1].split(':');
+                        let hour = parseInt(timeParts[0]);
+                        if (isPM && hour < 12) hour += 12;
+                        if (!isPM && hour === 12) hour = 0;
+                        dateObj = new Date(`${parts[0]} ${hour}:${timeParts[1]}`);
+                    }
+                }
             }
 
-            // 自動將時間轉換成：2026年6月13日 上午 3:00 這種超親切中文在地格式
-            return dateObj.toLocaleString('zh-TW', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-            });
+            // 如果還是無法成功解析，代表是一串特殊的純文字，就直接亮出原本輸入的文字
+            if (isNaN(dateObj.getTime())) {
+                return rawTime; 
+            }
+
+            // 開始精準抓取各個時間單位
+            const yyyy = dateObj.getFullYear();
+            const mm = dateObj.getMonth() + 1;
+            const dd = dateObj.getDate();
+            let hh = dateObj.getHours();
+            const min = String(dateObj.getMinutes()).padStart(2, '0');
+
+            // 👑 自動推算星期幾
+            const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
+            const dayOfWeek = weekDays[dateObj.getDay()];
+
+            // 轉換為上午/下午制
+            const ampm = hh >= 12 ? "下午" : "上午";
+            hh = hh % 12;
+            hh = hh ? hh : 12; // 0點改顯示為12點
+
+            // 拼裝出完美的呈現外觀：2026年6月12日 (五) 上午 3:00
+            return `${yyyy}年${mm}月${dd}日 (${dayOfWeek}) ${ampm} ${hh}:${min}`;
         }
 
         function renderMatches() {
@@ -230,8 +255,8 @@
                     `;
                 }
 
-                // 🛠️ 呼叫美化日期功能
-                const formattedTime = formatChineseDateTime(match.time);
+                // 🛠️ 呼叫全新中文星期格式化器
+                const formattedTime = formatChineseDateTimeWithWeek(match.time);
 
                 const card = document.createElement('div');
                 card.className = "p-3.5 border border-slate-200 rounded-xl bg-white shadow-sm";
