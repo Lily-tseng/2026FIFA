@@ -6,7 +6,7 @@
     <title>世足好友雲端預測王</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
-<style>
+    <style>
         body { font-family: 'Noto Sans TC', sans-serif; }
         /* 隱藏捲軸並強制啟用手機流暢滑動功能 */
         .no-scrollbar::-webkit-scrollbar { 
@@ -19,7 +19,8 @@
             display: flex;               /* 確保按鈕橫向排列 */
             -webkit-overflow-scrolling: touch; /* 讓手機滑動變得極度流暢不卡頓 */
         }
-    </style></head>
+    </style>
+</head>
 <body class="bg-slate-100 min-h-screen p-4 text-slate-800">
 
     <div id="loadingOverlay" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 text-white font-bold text-lg">
@@ -82,7 +83,7 @@
         // 【名單修改區】
         const users = ["曾爸", "曾媽", "薰虹", "厚任", "禹棠", "晉偉", "俐蓉", "博軒"];
         
-        // 🔗 【極重要更換區】：請把下方引號內換成你複製的 Google Apps Script 部署網址
+        // 🔗 【已為您保留正確的連線網址】
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
         let matches = [];
@@ -137,6 +138,7 @@
             }
         }
 
+        // 修正後的選單初始化：加入強制預設選取，防堵讀取時抓到空值
         function initUserSelect() {
             const select = document.getElementById('userSelect');
             select.innerHTML = ''; 
@@ -145,12 +147,18 @@
                 opt.value = user; opt.innerText = user;
                 select.appendChild(opt);
             });
+            if(users.length > 0) {
+                select.value = users[0]; // 強制指定預設選中名單第一個（曾爸）
+            }
         }
 
         function renderMatches() {
             const currentUser = document.getElementById('userSelect').value;
             const container = document.getElementById('matchList');
             container.innerHTML = '';
+
+            // 防呆：萬一選單真的還是抓到空字串，先攔截不報錯
+            if (!currentUser) return; 
 
             if(matches.length === 0) {
                 container.innerHTML = "<p class='text-center text-slate-400 text-sm'>試算表內尚無賽程資料</p>";
@@ -160,12 +168,12 @@
             // 🔍 【雙重過濾核心邏輯】
             let displayMatches = [...matches];
 
-            // 1. 先過濾賽制階段 (試算表內多增加的第 6 個欄位)
+            // 1. 先過濾賽制階段
             if (currentStage !== '全部') {
                 displayMatches = displayMatches.filter(m => m.stage === currentStage);
             }
 
-            // 2. 如果是選「最新10場」，在經過賽制過濾後，只切出最後10筆
+            // 2. 如果是選「最新10場」，只切出最後10筆
             if (currentTab === 'latest') {
                 if (displayMatches.length > 10) {
                     displayMatches = displayMatches.slice(-10);
@@ -270,6 +278,7 @@
             });
         }
 
+        // 啟動順序
         initUserSelect();
         loadCloudData();
     </script>
