@@ -95,7 +95,7 @@
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
 
-        // 切換範圍分頁 (最新10場 / 全部)
+        // 切換範圍分頁
         function switchTab(tab) {
             currentTab = tab;
             document.getElementById('tabLatest').className = tab === 'latest' ? "px-2.5 py-1.5 rounded-md bg-white text-blue-600 shadow-sm" : "px-2.5 py-1.5 rounded-md text-slate-600";
@@ -103,7 +103,7 @@
             renderMatches();
         }
 
-        // 切換賽制階段 (小組賽 / 16強 / 決賽等)
+        // 切換賽制階段
         function switchStage(stage) {
             currentStage = stage;
             const buttons = document.querySelectorAll('.stage-btn');
@@ -152,6 +152,7 @@
             }
         }
 
+        // 🛠️ 更新後的渲染功能：加入動態比數呈現
         function renderMatches() {
             const currentUser = document.getElementById('userSelect').value;
             const container = document.getElementById('matchList');
@@ -184,11 +185,35 @@
             displayMatches.forEach(match => {
                 const myPred = predictions[currentUser] ? predictions[currentUser][match.id] : null;
                 let statusBadge = "";
+                
+                // 判斷是否有填寫比數資料
+                const hasScore = (match.homeScore !== undefined && match.homeScore !== "" && match.awayScore !== undefined && match.awayScore !== "");
+
                 if (match.result !== 0 && match.result !== "") {
                     const isCorrect = (myPred == match.result);
                     statusBadge = isCorrect 
                         ? `<span class="text-green-600 text-xs font-bold">✅ 猜中！</span>`
                         : `<span class="text-red-500 text-xs font-bold">❌ 沒中</span>`;
+                }
+
+                // 根據有沒有比數，動態決定中間是要顯示「和」按鈕，還是顯示「比數結果」
+                let middleAreaHtml = "";
+                if (hasScore) {
+                    // 已比完且有比數：中間顯示精美的比數泡泡，原本的「和」按鈕則隱藏或調整成標籤
+                    const isDrawSelected = (myPred == 3);
+                    middleAreaHtml = `
+                        <div class="flex flex-col items-center justify-center px-2">
+                            <span class="text-sm font-extrabold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 shadow-inner">
+                                ${match.homeScore} - ${match.awayScore}
+                            </span>
+                            <span class="text-[10px] mt-1 font-bold ${isDrawSelected ? 'text-slate-500 underline' : 'text-slate-300'}">投和</span>
+                        </div>
+                    `;
+                } else {
+                    // 還沒比完或沒填比數：維持原本的「和」按鈕供大家點選
+                    middleAreaHtml = `
+                        <button onclick="savePredCloud('${match.id}', 3)" class="py-2 px-3 text-sm rounded-lg font-bold border ${myPred == 3 ? 'bg-slate-500 border-slate-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">和</button>
+                    `;
                 }
 
                 const card = document.createElement('div');
@@ -201,7 +226,7 @@
                     </div>
                     <div class="flex items-center justify-between gap-2">
                         <button onclick="savePredCloud('${match.id}', 1)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border ${myPred == 1 ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.home}</button>
-                        <button onclick="savePredCloud('${match.id}', 3)" class="py-2 px-3 text-sm rounded-lg font-bold border ${myPred == 3 ? 'bg-slate-500 border-slate-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">和</button>
+                        ${middleAreaHtml}
                         <button onclick="savePredCloud('${match.id}', 2)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border ${myPred == 2 ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.away}</button>
                     </div>
                 `;
@@ -236,7 +261,7 @@
                 if (!predictions[currentUser]) predictions[currentUser] = {};
                 predictions[currentUser][matchId] = choice;
                 renderMatches();
-                calculateScores(); // 這裡會同步觸發高低排序
+                calculateScores();
             } catch (error) {
                 alert("儲存至雲端失敗，請重試！");
             } finally {
@@ -246,7 +271,7 @@
 
         function switchUser() { renderMatches(); }
 
-        // 🛠️ 優化後的積分榜功能：強制轉型為數字，保證「由高到低」精準排列
+        // 積分榜功能
         function calculateScores() {
             const leaderboardContainer = document.getElementById('leaderboard');
             leaderboardContainer.innerHTML = '';
@@ -255,7 +280,6 @@
                 let score = 0;
                 matches.forEach(match => {
                     const userPred = predictions[user] ? predictions[user][match.id] : null;
-                    // 強制將試算表傳過來的結果轉為數字比對，避免純文字導致比對失敗
                     if (match.result !== 0 && match.result !== "" && Number(userPred) === Number(match.result)) {
                         score++;
                     }
@@ -263,11 +287,9 @@
                 return { name: user, score: score };
             });
 
-            // 👑 關鍵：由大到小純數字排序
             scores.sort((a, b) => b.score - a.score);
 
             scores.forEach((s, index) => {
-                // 為前三名加上不同的小皇冠/獎牌視覺效果，看起來更直觀刺激！
                 let rankBadge = `#${index + 1}`;
                 if (index === 0) rankBadge = "🥇";
                 if (index === 1) rankBadge = "🥈";
