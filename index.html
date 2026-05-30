@@ -2,40 +2,67 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>曾家世足雲端預測王</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 曾家世足雲端預測王</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 p-4">
     <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6">
         <h1 class="text-xl font-bold text-center text-blue-600 mb-4">⚽ 2026 曾家世足雲端預測王</h1>
-        <div id="status" class="text-center text-sm text-gray-500">同步資料中...</div>
-        <div id="matchList" class="space-y-4"></div>
+        
+        <label class="block text-sm font-bold mb-2">我是誰：</label>
+        <select id="userSelect" class="w-full p-3 border rounded-lg mb-6 font-bold bg-gray-50">
+            <option>曾爸</option><option>曾媽</option><option>薰虹</option><option>厚任</option><option>禹棠</option><option>晉偉</option><option>俐蓉</option><option>博軒</option>
+        </select>
+
+        <div id="matchList" class="space-y-4">讀取賽程中...</div>
     </div>
 
     <script>
+        // 請務必確認此網址是你目前 Apps Script 部署的網址
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
-        async function init() {
+        async function loadMatches() {
             try {
                 const res = await fetch(GAS_URL);
                 const data = await res.json();
-                document.getElementById('status').innerText = "";
-                const container = document.getElementById('matchList');
+                const list = document.getElementById('matchList');
+                list.innerHTML = "";
                 
                 data.matches.forEach(m => {
-                    container.innerHTML += `
-                        <div class="border p-3 rounded-lg shadow-sm">
-                            <div class="font-bold">${m.home} vs ${m.away}</div>
-                            <div class="text-xs text-gray-400">ID: ${m.id}</div>
+                    list.innerHTML += `
+                        <div class="border p-4 rounded-xl shadow-sm">
+                            <div class="text-[10px] text-blue-500 font-bold mb-1">${m.stage || '小組賽'}</div>
+                            <div class="font-bold text-lg mb-3">${m.home} vs ${m.away}</div>
+                            <div class="flex gap-2">
+                                <button onclick="vote('${m.id}', '${m.home}')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold text-blue-800">${m.home}</button>
+                                <button onclick="vote('${m.id}', '和局')" class="flex-1 bg-gray-100 py-2 rounded-lg text-sm font-bold text-gray-700">和</button>
+                                <button onclick="vote('${m.id}', '${m.away}')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold text-blue-800">${m.away}</button>
+                            </div>
                         </div>
                     `;
                 });
             } catch (e) {
-                document.getElementById('status').innerText = "⚠️ 連線失敗，請稍候重試";
-                console.error(e);
+                document.getElementById('matchList').innerHTML = "讀取失敗，請重新整理";
             }
         }
-        init();
+
+        async function vote(matchId, choice) {
+            const user = document.getElementById('userSelect').value;
+            if(!confirm(user + " 確定要預測「" + choice + "」嗎？")) return;
+
+            try {
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify({ user: user, matchId: matchId, choice: choice })
+                });
+                alert("✅ 預測已傳送！");
+            } catch (e) {
+                alert("❌ 連線錯誤，請稍後再試。");
+            }
+        }
+        loadMatches();
     </script>
 </body>
 </html>
