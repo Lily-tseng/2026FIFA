@@ -80,7 +80,260 @@
 
     <script>
         const users = ["曾爸", "曾媽", "薰虹", "厚任", "禹棠", "晉偉", "俐蓉", "博軒"];
-        // ⚡ 請確保下方的部署網址與你最新部署的版本完全一致
+        
+        // 🚨 這裡請貼上你重新部署後、最新取得的「Web 應用程式網址」
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
         let matches = [];
+        let predictions = {};
+        let currentTab = 'latest';  
+        let currentStage = '全部'; 
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.getElementById('tabLatest').className = tab === 'latest' ? "px-2.5 py-1.5 rounded-md bg-white text-blue-600 shadow-sm" : "px-2.5 py-1.5 rounded-md text-slate-600";
+            document.getElementById('tabAll').className = tab === 'all' ? "px-2.5 py-1.5 rounded-md bg-white text-blue-600 shadow-sm" : "px-2.5 py-1.5 rounded-md text-slate-600";
+            renderMatches();
+        }
+
+        function switchStage(stage) {
+            currentStage = stage;
+            const buttons = document.querySelectorAll('.stage-btn');
+            buttons.forEach(btn => {
+                if (btn.innerText === stage) {
+                    btn.className = "stage-btn shrink-0 px-3 py-2 rounded-full bg-blue-600 text-white shadow-sm";
+                } else {
+                    btn.className = "stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200";
+                }
+            });
+            renderMatches();
+        }
+
+        async function loadCloudData() {
+            showLoading(true);
+            try {
+                // 使用帶有時間戳記的 URL 防止被瀏覽器 Cache 舊阻擋
+                const fetchUrl = `${GAS_URL}?_=${new Date().getTime()}`;
+                const response = await fetch(fetchUrl, { method: 'GET', mode: 'cors' });
+                
+                if (!response.ok) throw new Error('伺服器回應錯誤');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error("GAS 端錯誤:", data.error);
+                    alert("雲端試算表錯誤：" + data.error);
+                    return;
+                }
+
+                matches = data.matches || [];
+                predictions = data.predictions || {};
+                
+                users.forEach(u => { if (!predictions[u]) predictions[u] = {}; });
+                
+                renderMatches();
+                calculateScores();
+            } catch (error) {
+                alert("讀取失敗，請確認是否已將 GAS 部署設為「所有人」並建立了新版本！");
+                console.error("Fetch Error:", error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function initUserSelect() {
+            const select = document.getElementById('userSelect');
+            select.innerHTML = ''; 
+            users.forEach(user => {
+                const opt = document.createElement('option');
+                opt.value = user; opt.innerText = user;
+                select.appendChild(opt);
+            });
+            if(users.length > 0) {
+                select.value = users[0];
+            }
+        }
+
+        function formatChineseDateTimeWithWeek(rawTime) {
+            if (!rawTime) return "未定時間";
+            let dateObj = new Date(rawTime);
+            
+            if (isNaN(dateObj.getTime())) {
+                let cleanTime = String(rawTime);
+                if (cleanTime.includes('上午') || cleanTime.includes('下午')) {
+                    cleanTime = cleanTime.replace('年', '/').replace('月', '/').replace('日', '');
+                    const isPM = cleanTime.includes('下午');
+                    cleanTime = cleanTime.replace('上午', '').replace('下午', '').trim();
+                    
+                    const parts = cleanTime.split(' ');
+                    if(parts.length === 2) {
+                        const timeParts = parts[1].split(':');
+                        let hour = parseInt(timeParts[0]);
+                        if (isPM && hour < 12) hour += 12;
+                        if (!isPM && hour === 12) hour = 0;
+                        dateObj = new Date(`${parts[0]} ${hour}:${timeParts[1]}`);
+                    }
+                }
+            }
+
+            if (isNaN(dateObj.getTime())) return rawTime; 
+
+            const yyyy = dateObj.getFullYear();
+            const mm = dateObj.getMonth() + 1;
+            const dd = dateObj.getDate();
+            let hh = dateObj.getHours();
+            const min = String(dateObj.getMinutes()).padStart(2, '0');
+
+            const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
+            const dayOfWeek = weekDays[dateObj.getDay()];
+
+            const ampm = hh >= 12 ? "下午" : "上午";
+            hh = hh % 12;
+            hh = hh ? hh : 12; 
+
+            return `${yyyy}年${mm}月${dd}日 (${dayOfWeek}) ${ampm} ${hh}:${min}`;
+        }
+
+        function renderMatches() {
+            const currentUser = document.getElementById('userSelect').value;
+            const container = document.getElementById('matchList');
+            container.innerHTML = '';
+
+            if (!currentUser) return; 
+            if(matches.length === 0) {
+                container.innerHTML = "<p class='text-center text-slate-400 text-sm py-4'>目前無賽程，請點擊下方手動刷新</p>";
+                return;
+            }
+
+            let displayMatches = [...matches];
+            if (currentStage !== '全部') displayMatches = displayMatches.filter(m => m.stage === currentStage);
+            if (currentTab === 'latest' && displayMatches.length > 10) displayMatches = displayMatches.slice(-10);
+
+            if (displayMatches.length === 0) {
+                container.innerHTML = `<p class='text-center text-slate-400 text-sm py-4'>此階段尚無相關賽程</p>`;
+                return;
+            }
+
+            displayMatches.forEach(match => {
+                const myPred = predictions[currentUser] ? predictions[currentUser][match.id] : null;
+                let statusBadge = "";
+                const hasScore = (match.homeScore !== undefined && match.homeScore !== "" && match.awayScore !== undefined && match.awayScore !== "");
+
+                if (match.result !== 0 && match.result !== "") {
+                    const isCorrect = (String(myPred) === String(match.result));
+                    statusBadge = isCorrect 
+                        ? `<span class="text-green-600 text-xs font-bold">✅ 猜中！</span>`
+                        : `<span class="text-red-500 text-xs font-bold">❌ 沒中</span>`;
+                }
+
+                let middleAreaHtml = "";
+                if (hasScore) {
+                    const isDrawSelected = (myPred == 3);
+                    middleAreaHtml = `
+                        <div class="flex flex-col items-center justify-center px-2">
+                            <span class="text-sm font-extrabold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 shadow-inner">
+                                ${match.homeScore} - ${match.awayScore}
+                            </span>
+                            <span class="text-[10px] mt-1 font-bold ${isDrawSelected ? 'text-slate-500 underline' : 'text-slate-300'}">投和</span>
+                        </div>
+                    `;
+                } else {
+                    middleAreaHtml = `
+                        <button onclick="savePredCloud('${match.id}', 3)" class="py-2 px-3 text-sm rounded-lg font-bold border ${myPred == 3 ? 'bg-slate-500 border-slate-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">和</button>
+                    `;
+                }
+
+                const card = document.createElement('div');
+                card.className = "p-3.5 border border-slate-200 rounded-xl bg-white shadow-sm";
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded">${match.stage || '小組賽'}</span>
+                        <span class="text-[11px] text-slate-400 font-medium">場次 ${match.id} | ${formatChineseDateTimeWithWeek(match.time)}</span>
+                        ${statusBadge}
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <button onclick="savePredCloud('${match.id}', 1)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border ${myPred == 1 ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.home}</button>
+                        ${middleAreaHtml}
+                        <button onclick="savePredCloud('${match.id}', 2)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border ${myPred == 2 ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.away}</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function savePredCloud(matchId, choice) {
+            const currentUser = document.getElementById('userSelect').value;
+            const isConfirmed = confirm(`❓ 確定要以【 ${currentUser} 】的身分進行預測嗎？`);
+            if (!isConfirmed) return;
+
+            showLoading(true);
+            try {
+                const details = { 'user': currentUser, 'matchId': matchId, 'choice': choice };
+                const formBody = Object.keys(details).map(key => encodeURIComponent(key) + '=' + encodeURIComponent(details[key])).join('&');
+
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                    body: formBody
+                });
+
+                if (!predictions[currentUser]) predictions[currentUser] = {};
+                predictions[currentUser][matchId] = choice;
+                renderMatches();
+                calculateScores();
+                
+                setTimeout(async () => {
+                    const res = await fetch(`${GAS_URL}?_=${new Date().getTime()}`);
+                    const d = await res.json();
+                    if(d && d.predictions) { predictions = d.predictions; renderMatches(); calculateScores(); }
+                }, 1200);
+            } catch (error) {
+                alert("儲存至雲端失敗，請重試！");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function switchUser() { renderMatches(); }
+
+        function calculateScores() {
+            const leaderboardContainer = document.getElementById('leaderboard');
+            leaderboardContainer.innerHTML = '';
+            
+            const scores = users.map(user => {
+                let score = 0;
+                matches.forEach(match => {
+                    const userPred = predictions[user] ? predictions[user][match.id] : null;
+                    if (match.result !== 0 && match.result !== "" && Number(userPred) === Number(match.result)) score++;
+                });
+                return { name: user, score: score };
+            });
+
+            scores.sort((a, b) => b.score - a.score);
+            scores.forEach((s, index) => {
+                let rankBadge = `#${index + 1}`;
+                if (index === 0) rankBadge = "🥇";
+                if (index === 1) rankBadge = "🥈";
+                if (index === 2) rankBadge = "🥉";
+
+                const row = document.createElement('div');
+                row.className = `flex justify-between items-center text-sm p-1 rounded ${index === 0 ? 'bg-amber-50/50' : ''}`;
+                row.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="w-6 h-6 flex items-center justify-center text-xs font-bold text-slate-500">${rankBadge}</span>
+                        <span class="font-bold ${index === 0 ? 'text-amber-700' : 'text-slate-700'}">${s.name}</span>
+                    </div>
+                    <span class="${index === 0 ? 'text-amber-600' : 'text-blue-600'} font-bold">${s.score} 分</span>
+                `;
+                leaderboardContainer.appendChild(row);
+            });
+        }
+
+        initUserSelect();
+        loadCloudData();
+    </script>
+</body>
+</html>
