@@ -17,9 +17,10 @@
     </div>
 
     <script>
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
+        const GAS_URL = "https://script.google.com/macros/s/你的部署網址/exec"; // 請填入你正確的網址
 
         async function load() {
+            // ... (原本的 load 函數內容保持不變)
             const res = await fetch(GAS_URL);
             const data = await res.json();
             const container = document.getElementById('matchList');
@@ -31,18 +32,38 @@
                         <div class="text-[10px] text-blue-500 font-bold mb-1">${m.stage}</div>
                         <div class="font-bold text-lg mb-2">${m.home} vs ${m.away}</div>
                         <div class="flex gap-2">
-                            <button onclick="vote('${m.id}', 'home')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.home}</button>
-                            <button onclick="vote('${m.id}', 'draw')" class="flex-1 bg-gray-100 py-2 rounded-lg text-sm font-bold">和</button>
-                            <button onclick="vote('${m.id}', 'away')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.away}</button>
+                            <button onclick="vote('${m.id}', '${m.home}')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.home}</button>
+                            <button onclick="vote('${m.id}', '和局')" class="flex-1 bg-gray-100 py-2 rounded-lg text-sm font-bold">和</button>
+                            <button onclick="vote('${m.id}', '${m.away}')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.away}</button>
                         </div>
                     </div>
                 `;
             });
         }
-        function vote(id, choice) {
+
+        // 這就是你剛才問的「投票功能」寫入邏輯
+        async function vote(matchId, choice) {
             const user = document.getElementById('userSelect').value;
-            alert(user + " 投給了 " + choice + " (場次 " + id + ") - 功能連線中...");
+            
+            if(!confirm(user + " 確定要預測「" + choice + "」贏嗎？")) return;
+
+            try {
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // 處理跨網域問題
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user: user,
+                        matchId: matchId,
+                        choice: choice
+                    })
+                });
+                alert("✅ 預測已發送！(請確認試算表已出現資料)");
+            } catch (e) {
+                alert("❌ 連線錯誤，請檢查網路。");
+            }
         }
+        
         load();
     </script>
 </body>
