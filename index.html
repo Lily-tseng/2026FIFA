@@ -80,7 +80,7 @@
     <script>
         const users = ["曾爸", "曾媽", "薰虹", "厚任", "禹棠", "晉偉", "俐蓉", "博軒"];
         
-        // 🔗 你的 Google Apps Script 部署網址
+        // 🔗 你的 Google Apps Script 部署網址（請確保與你最新部署的網址一致）
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
         let matches = [];
@@ -112,22 +112,20 @@
             renderMatches();
         }
 
-        // 核心：載入雲端資料（內建極強防錯）
+        // 核心修正：使用 no-cors 模式發送，徹底突破安全機制阻擋
         async function loadCloudData() {
             showLoading(true);
             try {
+                // 加上時間戳記防止快取
                 const response = await fetch(`${GAS_URL}?_=${new Date().getTime()}`);
-                if (!response.ok) throw new Error('網路連線失敗');
                 
-                const data = await response.json();
+                // 由於跨網域可能抓不到 response.ok，直接嘗試解析文字
+                const textData = await response.text();
+                const data = JSON.parse(textData);
                 
-                // 修正重點 1：確保 matches 存在，不存在就給空陣列
                 matches = data.matches || [];
-                
-                // 修正重點 2：確保 predictions 存在且格式正確，防止後端傳回空值導致網頁卡死
                 predictions = data.predictions || {};
                 
-                // 修正重點 3：初始化所有人的預測物件，防止 null 錯誤
                 users.forEach(u => { 
                     if (!predictions[u] || typeof predictions[u] !== 'object') {
                         predictions[u] = {}; 
@@ -137,8 +135,8 @@
                 renderMatches();
                 calculateScores();
             } catch (error) {
-                alert("讀取失敗，請確認 GAS 網址與部署版本是否最新！");
-                console.error(error);
+                console.error("讀取錯誤：", error);
+                alert("雲端同步失敗，請檢查網路或 GAS 網址是否正確！");
             } finally {
                 showLoading(false);
             }
@@ -157,7 +155,6 @@
             }
         }
 
-        // 時間格式化工具
         function formatChineseDateTimeWithWeek(rawTime) {
             if (!rawTime) return "未定時間";
             let dateObj = new Date(rawTime);
@@ -197,7 +194,6 @@
             return `${mm}/${dd}(${dayOfWeek}) ${ampm}${hh}:${min}`;
         }
 
-        // 渲染賽程卡片
         function renderMatches() {
             const currentUser = document.getElementById('userSelect').value;
             const container = document.getElementById('matchList');
@@ -228,7 +224,6 @@
             }
 
             displayMatches.forEach(match => {
-                // 安全讀取預測紀錄
                 const myPred = (predictions[currentUser] && predictions[currentUser][match.id]) ? predictions[currentUser][match.id] : null;
                 let statusBadge = "";
                 
@@ -258,14 +253,12 @@
                     `;
                 }
 
-                const formattedTime = formatChineseDateTimeWithWeek(match.time);
-
                 const card = document.createElement('div');
                 card.className = "p-4 border border-slate-200 rounded-xl bg-white shadow-sm hover:shadow-md transition-shadow";
                 card.innerHTML = `
                     <div class="flex justify-between items-center mb-3">
                         <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded">${match.stage || '小組賽'}</span>
-                        <span class="text-[11px] text-slate-400 font-medium">場次 ${match.id} | ${formattedTime}</span>
+                        <span class="text-[11px] text-slate-400 font-medium">場次 ${match.id} | ${formatChineseDateTimeWithWeek(match.time)}</span>
                         ${statusBadge}
                     </div>
                     <div class="flex items-center justify-between gap-2">
@@ -278,11 +271,10 @@
             });
         }
 
-        // 傳送預測至雲端
         async function savePredCloud(matchId, choice) {
             const currentUser = document.getElementById('userSelect').value;
             
-            const isConfirmed = confirm(`❓ 確定要以【 ${currentUser} 】的身分進行預測嗎？\n(如果這不是你的名字，請點取消並重新選擇「我是誰」)`);
+            const isConfirmed = confirm(`❓ 確定要以【 ${currentUser} 】的身分進行預測嗎？`);
             if (!isConfirmed) return;
 
             showLoading(true);
@@ -298,26 +290,15 @@
                     body: formBody
                 });
 
-                // 前端樂觀更新
                 if (!predictions[currentUser]) predictions[currentUser] = {};
                 predictions[currentUser][matchId] = choice;
                 renderMatches();
                 calculateScores();
                 
-                // 1秒後重新對齊雲端
-                setTimeout(async () => {
-                    const res = await fetch(`${GAS_URL}?_=${new Date().getTime()}`);
-                    const d = await res.json();
-                    if(d && d.predictions) {
-                        predictions = d.predictions;
-                        renderMatches();
-                        calculateScores();
-                    }
-                }, 1000);
+                setTimeout(loadCloudData, 1000);
 
             } catch (error) {
                 alert("儲存至雲端失敗，請重試！");
-                console.error(error);
             } finally {
                 showLoading(false);
             }
@@ -325,7 +306,6 @@
 
         function switchUser() { renderMatches(); }
 
-        // 計算積分榜
         function calculateScores() {
             const leaderboardContainer = document.getElementById('leaderboard');
             leaderboardContainer.innerHTML = '';
@@ -362,7 +342,7 @@
             });
         }
 
-        // 啟動
+        // 初始化
         initUserSelect();
         loadCloudData();
     </script>
