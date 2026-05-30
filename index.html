@@ -6,8 +6,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 p-4">
-    <div id="app" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6">
+    <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6">
         <h1 class="text-xl font-bold text-center text-blue-600 mb-4">⚽ 2026 曾家世足雲端預測王</h1>
+        
+        <select id="userSelect" class="w-full p-2 border rounded-lg mb-4 font-bold">
+            <option>曾爸</option><option>曾媽</option><option>薰虹</option><option>厚任</option><option>禹棠</option><option>晉偉</option><option>俐蓉</option><option>博軒</option>
+        </select>
+
         <div id="matchList" class="space-y-4">載入中...</div>
     </div>
 
@@ -15,29 +20,28 @@
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
         async function load() {
-            try {
-                const res = await fetch(GAS_URL + "?nocache=" + new Date().getTime());
-                const data = await res.json();
-                const container = document.getElementById('matchList');
-                container.innerHTML = ""; 
+            const res = await fetch(GAS_URL);
+            const data = await res.json();
+            const container = document.getElementById('matchList');
+            container.innerHTML = "";
 
-                data.matches.forEach(m => {
-                    container.innerHTML += `
-                        <div class="border p-4 rounded-xl shadow-sm bg-white">
-                            <div class="text-[10px] text-blue-500 font-bold mb-1">${m.stage}</div>
-                            <div class="font-bold text-lg mb-2">${m.home} vs ${m.away}</div>
-                            <div class="flex gap-2">
-                                <button onclick="alert('投票功能啟用中')" class="flex-1 bg-blue-100 text-blue-700 py-2 rounded-lg text-sm font-bold">${m.home}</button>
-                                <button onclick="alert('投票功能啟用中')" class="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-bold">和</button>
-                                <button onclick="alert('投票功能啟用中')" class="flex-1 bg-blue-100 text-blue-700 py-2 rounded-lg text-sm font-bold">${m.away}</button>
-                            </div>
-                            <div class="text-[10px] text-gray-400 mt-2 text-right">時間: ${new Date(m.time).toLocaleString()}</div>
+            data.matches.forEach(m => {
+                container.innerHTML += `
+                    <div class="border p-4 rounded-xl shadow-sm bg-white">
+                        <div class="text-[10px] text-blue-500 font-bold mb-1">${m.stage}</div>
+                        <div class="font-bold text-lg mb-2">${m.home} vs ${m.away}</div>
+                        <div class="flex gap-2">
+                            <button onclick="vote('${m.id}', 'home')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.home}</button>
+                            <button onclick="vote('${m.id}', 'draw')" class="flex-1 bg-gray-100 py-2 rounded-lg text-sm font-bold">和</button>
+                            <button onclick="vote('${m.id}', 'away')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.away}</button>
                         </div>
-                    `;
-                });
-            } catch (e) {
-                document.getElementById('matchList').innerHTML = "讀取失敗，請稍後再試";
-            }
+                    </div>
+                `;
+            });
+        }
+        function vote(id, choice) {
+            const user = document.getElementById('userSelect').value;
+            alert(user + " 投給了 " + choice + " (場次 " + id + ") - 功能連線中...");
         }
         load();
     </script>
