@@ -21,13 +21,12 @@
     <script>
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
-        async function loadMatches() {
-            try {
-                const res = await fetch(GAS_URL);
-                const data = await res.json();
+        // 1. 讀取賽程
+        fetch(GAS_URL)
+            .then(res => res.json())
+            .then(data => {
                 const list = document.getElementById('matchList');
                 list.innerHTML = "";
-                
                 data.matches.forEach(m => {
                     list.innerHTML += `
                         <div class="border p-4 rounded-xl shadow-sm bg-white">
@@ -41,34 +40,21 @@
                         </div>
                     `;
                 });
-            } catch (e) {
+            }).catch(() => {
                 document.getElementById('matchList').innerHTML = "讀取失敗，請重新整理";
-            }
-        }
+            });
 
-        async function vote(matchId, choice) {
+        // 2. 投票功能（用最古老、最穩定的外開視窗法，絕對不會被 Google 擋）
+        function vote(matchId, choice) {
             const user = document.getElementById('userSelect').value;
             if(!confirm(user + " 確定要預測「" + choice + "」嗎？")) return;
 
-            // 為了避開 CORS 限制，這裡使用 FormData 格式傳送
-            const formData = new FormData();
-            formData.append('user', user);
-            formData.append('matchId', matchId);
-            formData.append('choice', choice);
-
-            try {
-                // 修改寫入方式為 POST
-                const response = await fetch(GAS_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ user, matchId, choice }),
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                alert("✅ 預測已成功寫入試算表！");
-            } catch (e) {
-                alert("❌ 連線錯誤，請檢查網路。");
-            }
+            // 把資料直接變成網址的一部分傳過去
+            const targetUrl = `${GAS_URL}?user=${encodeURIComponent(user)}&matchId=${encodeURIComponent(matchId)}&choice=${encodeURIComponent(choice)}`;
+            
+            // 彈出一個新視窗去執行 Google 寫入動作，執行完關掉即可
+            window.open(targetUrl, "_blank");
         }
-        loadMatches();
     </script>
 </body>
 </html>
