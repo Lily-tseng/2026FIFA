@@ -8,63 +8,34 @@
 <body class="bg-slate-100 p-4">
     <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6">
         <h1 class="text-xl font-bold text-center text-blue-600 mb-4">⚽ 2026 曾家世足雲端預測王</h1>
-        
-        <select id="userSelect" class="w-full p-2 border rounded-lg mb-4 font-bold">
-            <option>曾爸</option><option>曾媽</option><option>薰虹</option><option>厚任</option><option>禹棠</option><option>晉偉</option><option>俐蓉</option><option>博軒</option>
-        </select>
-
-        <div id="matchList" class="space-y-4">載入中...</div>
+        <div id="status" class="text-center text-sm text-gray-500">同步資料中...</div>
+        <div id="matchList" class="space-y-4"></div>
     </div>
 
     <script>
-        const GAS_URL = "https://script.google.com/macros/s/你的部署網址/exec"; // 請填入你正確的網址
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
-        async function load() {
-            // ... (原本的 load 函數內容保持不變)
-            const res = await fetch(GAS_URL);
-            const data = await res.json();
-            const container = document.getElementById('matchList');
-            container.innerHTML = "";
-
-            data.matches.forEach(m => {
-                container.innerHTML += `
-                    <div class="border p-4 rounded-xl shadow-sm bg-white">
-                        <div class="text-[10px] text-blue-500 font-bold mb-1">${m.stage}</div>
-                        <div class="font-bold text-lg mb-2">${m.home} vs ${m.away}</div>
-                        <div class="flex gap-2">
-                            <button onclick="vote('${m.id}', '${m.home}')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.home}</button>
-                            <button onclick="vote('${m.id}', '和局')" class="flex-1 bg-gray-100 py-2 rounded-lg text-sm font-bold">和</button>
-                            <button onclick="vote('${m.id}', '${m.away}')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.away}</button>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        // 這就是你剛才問的「投票功能」寫入邏輯
-        async function vote(matchId, choice) {
-            const user = document.getElementById('userSelect').value;
-            
-            if(!confirm(user + " 確定要預測「" + choice + "」贏嗎？")) return;
-
+        async function init() {
             try {
-                const response = await fetch(GAS_URL, {
-                    method: 'POST',
-                    mode: 'no-cors', // 處理跨網域問題
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user: user,
-                        matchId: matchId,
-                        choice: choice
-                    })
+                const res = await fetch(GAS_URL);
+                const data = await res.json();
+                document.getElementById('status').innerText = "";
+                const container = document.getElementById('matchList');
+                
+                data.matches.forEach(m => {
+                    container.innerHTML += `
+                        <div class="border p-3 rounded-lg shadow-sm">
+                            <div class="font-bold">${m.home} vs ${m.away}</div>
+                            <div class="text-xs text-gray-400">ID: ${m.id}</div>
+                        </div>
+                    `;
                 });
-                alert("✅ 預測已發送！(請確認試算表已出現資料)");
             } catch (e) {
-                alert("❌ 連線錯誤，請檢查網路。");
+                document.getElementById('status').innerText = "⚠️ 連線失敗，請稍候重試";
+                console.error(e);
             }
         }
-        
-        load();
+        init();
     </script>
 </body>
 </html>
