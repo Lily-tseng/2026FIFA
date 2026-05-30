@@ -2,41 +2,40 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2026 曾家世足雲端預測王</title>
+    <title>曾家世足雲端預測王</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 p-4">
-    <div id="app" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6">
+    <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6">
         <h1 class="text-xl font-bold text-center text-blue-600 mb-4">⚽ 2026 曾家世足雲端預測王</h1>
-        <div id="matchList" class="space-y-4">讀取中...</div>
+        <div id="matchList" class="space-y-3">載入中...</div>
     </div>
 
     <script>
-        // 請務必確認這個網址是你最新部署的 GAS 網址
+        // 貼上你那個確認過會有資料的 GAS 網址
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
-        async function loadData() {
+        async function load() {
             try {
                 const res = await fetch(GAS_URL);
                 const data = await res.json();
-                const list = document.getElementById('matchList');
-                list.innerHTML = "";
-                
+                const container = document.getElementById('matchList');
+                container.innerHTML = ""; // 清空載入中文字
+
                 data.matches.forEach(m => {
-                    list.innerHTML += `
-                        <div class="border p-3 rounded-lg shadow-sm">
-                            <div class="text-[10px] text-blue-500 font-bold">${m.stage || '小組賽'}</div>
-                            <div class="font-bold text-lg">${m.home} vs ${m.away}</div>
-                            <div class="text-[10px] text-gray-400">時間: ${m.time}</div>
+                    container.innerHTML += `
+                        <div class="border-b pb-2">
+                            <div class="text-[10px] text-blue-500 font-bold">${m.stage}</div>
+                            <div class="font-bold">${m.home} vs ${m.away}</div>
+                            <div class="text-[10px] text-gray-400">${new Date(m.time).toLocaleString()}</div>
                         </div>
                     `;
                 });
             } catch (e) {
-                document.getElementById('matchList').innerHTML = "❌ 讀取失敗，請稍後再試";
+                document.getElementById('matchList').innerHTML = "讀取失敗";
             }
         }
-        loadData();
+        load();
     </script>
 </body>
 </html>
