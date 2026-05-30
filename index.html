@@ -19,6 +19,7 @@
     </div>
 
     <script>
+        // https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
         // 1. 讀取賽程
@@ -33,26 +34,24 @@
                             <div class="text-[10px] text-blue-500 font-bold mb-1">${m.stage}</div>
                             <div class="font-bold text-lg mb-2">${m.home} vs ${m.away}</div>
                             <div class="flex gap-2">
-                                <button onclick="vote('${m.id}', '${m.home}')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.home}</button>
-                                <button onclick="vote('${m.id}', '和局')" class="flex-1 bg-gray-100 py-2 rounded-lg text-sm font-bold">和</button>
-                                <button onclick="vote('${m.id}', '${m.away}')" class="flex-1 bg-blue-100 py-2 rounded-lg text-sm font-bold">${m.away}</button>
+                                <button onclick="vote('${m.id}', '${m.home}')" class="flex-1 bg-blue-100 hover:bg-blue-200 py-2 rounded-lg text-sm font-bold text-blue-800">${m.home}</button>
+                                <button onclick="vote('${m.id}', '和局')" class="flex-1 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg text-sm font-bold text-gray-700">和</button>
+                                <button onclick="vote('${m.id}', '${m.away}')" class="flex-1 bg-blue-100 hover:bg-blue-200 py-2 rounded-lg text-sm font-bold text-blue-800">${m.away}</button>
                             </div>
                         </div>
                     `;
                 });
-            }).catch(() => {
-                document.getElementById('matchList').innerHTML = "讀取失敗，請重新整理";
+            }).catch((err) => {
+                document.getElementById('matchList').innerHTML = "讀取失敗，請確認 GAS 網址與部署版本。";
+                console.error(err);
             });
 
-        // 2. 投票功能（用最古老、最穩定的外開視窗法，絕對不會被 Google 擋）
+        // 2. 投票功能
         function vote(matchId, choice) {
             const user = document.getElementById('userSelect').value;
             if(!confirm(user + " 確定要預測「" + choice + "」嗎？")) return;
 
-            // 把資料直接變成網址的一部分傳過去
             const targetUrl = `${GAS_URL}?user=${encodeURIComponent(user)}&matchId=${encodeURIComponent(matchId)}&choice=${encodeURIComponent(choice)}`;
-            
-            // 彈出一個新視窗去執行 Google 寫入動作，執行完關掉即可
             window.open(targetUrl, "_blank");
         }
     </script>
