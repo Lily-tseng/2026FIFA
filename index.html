@@ -29,7 +29,7 @@
         
         <div class="text-center mb-6">
             <h1 class="text-2xl font-bold text-blue-600">⚽ 2026 曾家世足雲端預測王</h1>
-            <p class="text-slate-400 text-xs mt-1">全手機即時連線同步版</p>
+            <p class="text-slate-400 text-xs mt-1">即時連線同步．防作弊智能優化版</p>
         </div>
 
         <div class="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
@@ -78,9 +78,10 @@
     </div>
 
     <script>
+        // 曾家預測成員名單
         const users = ["曾爸", "曾媽", "薰虹", "厚任", "禹棠", "晉偉", "俐蓉", "博軒"];
         
-        // 🔗 你的 Google Apps Script 部署網址（請確保與你最新部署的網址一致）
+        // 🔗 你的 Google Apps Script 部署網址（重新發布後請確認此處網址是否正確）
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzT90jb9Tg_M1lqRDCvDoOnArNDgLhKkoBya9Ua-wwWOAPl5G00x6mHhyoNs_ZdD7_H/exec";
 
         let matches = [];
@@ -112,14 +113,11 @@
             renderMatches();
         }
 
-        // 核心修正：使用 no-cors 模式發送，徹底突破安全機制阻擋
+        // 從雲端下載資料
         async function loadCloudData() {
             showLoading(true);
             try {
-                // 加上時間戳記防止快取
                 const response = await fetch(`${GAS_URL}?_=${new Date().getTime()}`);
-                
-                // 由於跨網域可能抓不到 response.ok，直接嘗試解析文字
                 const textData = await response.text();
                 const data = JSON.parse(textData);
                 
@@ -136,7 +134,7 @@
                 calculateScores();
             } catch (error) {
                 console.error("讀取錯誤：", error);
-                alert("雲端同步失敗，請檢查網路或 GAS 網址是否正確！");
+                alert("雲端同步失敗，請確認網路或 GAS 網址與部署版本！");
             } finally {
                 showLoading(false);
             }
@@ -155,6 +153,7 @@
             }
         }
 
+        // 時間格式化工具
         function formatChineseDateTimeWithWeek(rawTime) {
             if (!rawTime) return "未定時間";
             let dateObj = new Date(rawTime);
@@ -194,6 +193,7 @@
             return `${mm}/${dd}(${dayOfWeek}) ${ampm}${hh}:${min}`;
         }
 
+        // 渲染賽程卡片（優化：[全部] 功能改為顯示即將開打的 10 場）
         function renderMatches() {
             const currentUser = document.getElementById('userSelect').value;
             const container = document.getElementById('matchList');
@@ -208,10 +208,17 @@
 
             let displayMatches = [...matches];
 
-            if (currentStage !== '全部') {
+            // 🌟 核心修改 3：當按鈕按在「全部」時，修改為顯示「即將開打、還沒有結果的最新 10 場」
+            if (currentStage === '全部') {
+                displayMatches = displayMatches
+                    .filter(m => !m.result || m.result == 0 || m.result === "") // 只要還沒出結果的都算
+                    .sort((a, b) => new Date(a.time) - new Date(b.time));      // 依開賽時間從近到遠排
+            } else {
+                // 如果是特定階段（如小組賽、16強等），則過濾出該階段全部賽程
                 displayMatches = displayMatches.filter(m => m.stage === currentStage);
             }
 
+            // 處理右上角頁籤限制
             if (currentTab === 'latest') {
                 if (displayMatches.length > 10) {
                     displayMatches = displayMatches.slice(0, 10);
@@ -219,7 +226,7 @@
             }
 
             if (displayMatches.length === 0) {
-                container.innerHTML = `<p class='text-center text-slate-400 text-sm py-4'>此階段尚無相關賽程</p>`;
+                container.innerHTML = `<p class='text-center text-slate-400 text-sm py-4'>目前無相關賽程</p>`;
                 return;
             }
 
@@ -271,6 +278,7 @@
             });
         }
 
+        // 上傳預測紀錄
         async function savePredCloud(matchId, choice) {
             const currentUser = document.getElementById('userSelect').value;
             
@@ -284,21 +292,33 @@
                                        .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(details[key]))
                                        .join('&');
 
-                await fetch(GAS_URL, {
+                const response = await fetch(GAS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
                     body: formBody
                 });
+                
+                const result = await response.json();
+                
+                // 處理後端拋出的「已開賽防作弊鎖」錯誤訊息
+                if (result.status === "error") {
+                    alert(`🚨 儲存失敗：${result.message}`);
+                    loadCloudData(); // 重新對齊
+                    return;
+                }
 
+                // 前端樂觀更新
                 if (!predictions[currentUser]) predictions[currentUser] = {};
                 predictions[currentUser][matchId] = choice;
                 renderMatches();
                 calculateScores();
                 
+                // 1秒後自動重新拉取最新狀態
                 setTimeout(loadCloudData, 1000);
 
             } catch (error) {
-                alert("儲存至雲端失敗，請重試！");
+                alert("與雲端連線時發生錯誤，請重試！");
+                console.error(error);
             } finally {
                 showLoading(false);
             }
@@ -306,6 +326,7 @@
 
         function switchUser() { renderMatches(); }
 
+        // 計算排行榜積分
         function calculateScores() {
             const leaderboardContainer = document.getElementById('leaderboard');
             leaderboardContainer.innerHTML = '';
@@ -342,7 +363,7 @@
             });
         }
 
-        // 初始化
+        // 啟動初始化
         initUserSelect();
         loadCloudData();
     </script>
