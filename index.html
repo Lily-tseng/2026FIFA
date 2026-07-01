@@ -29,7 +29,7 @@
         <div class="max-w-md mx-auto bg-white rounded-t-2xl shadow-md border-t border-x border-slate-200 p-6 pb-2">
             <div class="text-center mb-5">
                 <h1 class="text-2xl font-bold text-blue-600">⚽ 2026 曾家世足雲端預測王</h1>
-                <p class="text-slate-400 text-xs mt-1">小組賽可以投和局，32強之後生死二選一！</p>
+                <p class="text-red-500 text-xs font-bold mt-1">🔥 淘汰賽積分大加碼！16強+2|8強+3|準決賽+4|季軍+5|決賽+8</p>
             </div>
 
             <div class="mb-5 bg-blue-50 p-4 rounded-xl border border-blue-100">
@@ -91,11 +91,21 @@
         let currentTab = 'latest';  
         let currentStage = '全部'; 
 
+        // 建立一個對照表，加速計分判定
+        const STAGE_SCORES = {
+            "16強": 2,
+            "8強": 3,
+            "準決賽": 4,
+            "季軍戰": 5,
+            "決賽": 8
+        };
+
         function showLoading(show) {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
 
         function switchTab(tab) {
+            if (currentTab === tab) return;
             currentTab = tab;
             document.getElementById('tabLatest').className = tab === 'latest' ? "px-2.5 py-1.5 rounded-md bg-white text-blue-600 shadow-sm" : "px-2.5 py-1.5 rounded-md text-slate-600";
             document.getElementById('tabAll').className = tab === 'all' ? "px-2.5 py-1.5 rounded-md bg-white text-blue-600 shadow-sm" : "px-2.5 py-1.5 rounded-md text-slate-600";
@@ -103,68 +113,26 @@
         }
 
         function switchStage(stage) {
+            if (currentStage === stage) return;
             currentStage = stage;
-            const buttons = document.querySelectorAll('.stage-btn');
-            buttons.forEach(btn => {
-                if (btn.innerText === stage) {
-                    btn.className = "stage-btn shrink-0 px-3 py-2 rounded-full bg-blue-600 text-white shadow-sm";
-                } else {
-                    btn.className = "stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200";
-                }
+            document.querySelectorAll('.stage-btn').forEach(btn => {
+                btn.className = btn.innerText === stage 
+                    ? "stage-btn shrink-0 px-3 py-2 rounded-full bg-blue-600 text-white shadow-sm" 
+                    : "stage-btn shrink-0 px-3 py-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200";
             });
             renderMatches();
         }
 
-        async function loadCloudData() {
-            showLoading(true);
-            try {
-                const response = await fetch(`${GAS_URL}?_=${new Date().getTime()}`);
-                const textData = await response.text();
-                const data = JSON.parse(textData);
-                
-                matches = data.matches || [];
-                predictions = data.predictions || {};
-                
-                users.forEach(u => { 
-                    if (!predictions[u] || typeof predictions[u] !== 'object') {
-                        predictions[u] = {}; 
-                    }
-                });
-                
-                renderMatches();
-                calculateScores();
-            } catch (error) {
-                console.error("讀取錯誤：", error);
-                alert("雲端同步失敗，請確認網路或 GAS 網址與部署版本！");
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        function initUserSelect() {
-            const select = document.getElementById('userSelect');
-            select.innerHTML = ''; 
-            users.forEach(user => {
-                const opt = document.createElement('option');
-                opt.value = user; opt.innerText = user;
-                select.appendChild(opt);
-            });
-            if(users.length > 0) {
-                select.value = users[0];
-            }
-        }
-
-        function formatChineseDateTimeWithWeek(rawTime) {
+        // 解析時間字串：只在下載資料時執行一次（快取化優化）
+        function parseAndFormatTime(rawTime) {
             if (!rawTime) return "未定時間";
             let dateObj = new Date(rawTime);
-            
             if (isNaN(dateObj.getTime())) {
                 let cleanTime = String(rawTime);
                 if (cleanTime.includes('上午') || cleanTime.includes('下午')) {
                     cleanTime = cleanTime.replace('年', '/').replace('月', '/').replace('日', '');
                     const isPM = cleanTime.includes('下午');
                     cleanTime = cleanTime.replace('上午', '').replace('下午', '').trim();
-                    
                     const parts = cleanTime.split(' ');
                     if(parts.length === 2) {
                         const timeParts = parts[1].split(':');
@@ -175,50 +143,68 @@
                     }
                 }
             }
-
             if (isNaN(dateObj.getTime())) return rawTime; 
-
             const mm = dateObj.getMonth() + 1;
             const dd = dateObj.getDate();
             let hh = dateObj.getHours();
             const min = String(dateObj.getMinutes()).padStart(2, '0');
-
             const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
             const dayOfWeek = weekDays[dateObj.getDay()];
-
             const ampm = hh >= 12 ? "下午" : "上午";
-            hh = hh % 12;
-            hh = hh ? hh : 12; 
-
+            hh = hh % 12 || 12; 
             return `${mm}/${dd}(${dayOfWeek}) ${ampm}${hh}:${min}`;
+        }
+
+        async function loadCloudData() {
+            showLoading(true);
+            try {
+                const response = await fetch(`${GAS_URL}?_=${Date.now()}`);
+                const data = await response.json();
+                
+                predictions = data.predictions || {};
+                users.forEach(u => { if (!predictions[u]) predictions[u] = {}; });
+
+                // 優化點：在這裡就把時間和權重分數算好，存在陣列中，後面不重複計算
+                matches = (data.matches || []).map(m => ({
+                    ...m,
+                    formattedTime: parseAndFormatTime(m.time),
+                    isElimination: parseInt(m.id) >= 74,
+                    hasScore: m.homeScore !== undefined && m.homeScore !== "" && m.awayScore !== undefined && m.awayScore !== "",
+                    weightScore: STAGE_SCORES[m.stage] || 1
+                }));
+                
+                renderMatches();
+                calculateScores();
+            } catch (error) {
+                console.error("讀取錯誤：", error);
+                alert("雲端同步失敗，請稍後重試！");
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function initUserSelect() {
+            const select = document.getElementById('userSelect');
+            select.innerHTML = users.map(u => `<option value="${u}">${u}</option>`).join('');
+            select.value = users[0];
         }
 
         function renderMatches() {
             const currentUser = document.getElementById('userSelect').value;
             const container = document.getElementById('matchList');
-            container.innerHTML = '';
-
-            if (!currentUser) return; 
-
-            if(matches.length === 0) {
+            if (!currentUser) return;
+            if (matches.length === 0) {
                 container.innerHTML = "<p class='text-center text-slate-400 text-sm py-4'>試算表內尚無賽程資料</p>";
                 return;
             }
 
-            let displayMatches = [...matches];
+            // 快速過濾與排序
+            let displayMatches = currentStage === '全部'
+                ? matches.filter(m => !m.result || m.result == 0 || m.result === "").sort((a, b) => new Date(a.time) - new Date(b.time))
+                : matches.filter(m => m.stage === currentStage);
 
-            if (currentStage === '全部') {
-                displayMatches = displayMatches
-                    .filter(m => !m.result || m.result == 0 || m.result === "") 
-                    .sort((a, b) => new Date(a.time) - new Date(b.time));      
-            } else {
-                displayMatches = displayMatches.filter(m => m.stage === currentStage);
-            }
-
-            if (currentTab === 'latest') {
-                if (displayMatches.length > 10) {
-                    displayMatches = displayMatches.slice(0, 10);
-                }
+            if (currentTab === 'latest' && displayMatches.length > 10) {
+                displayMatches = displayMatches.slice(0, 10);
             }
 
             if (displayMatches.length === 0) {
@@ -226,76 +212,63 @@
                 return;
             }
 
+            // 使用字串組合一次性寫入 DOM，大幅減少瀏覽器渲染負擔
+            let htmlBuffer = "";
             displayMatches.forEach(match => {
-                const myPred = (predictions[currentUser] && predictions[currentUser][match.id]) ? predictions[currentUser][match.id] : null;
+                const myPred = predictions[currentUser]?.[match.id] || null;
                 let statusBadge = "";
                 
-                const hasScore = (match.homeScore !== undefined && match.homeScore !== "" && match.awayScore !== undefined && match.awayScore !== "");
-
-                if (match.result !== undefined && match.result !== 0 && match.result !== "") {
-                    const isCorrect = (String(myPred) === String(match.result));
-                    statusBadge = isCorrect 
+                if (match.result && match.result != 0) {
+                    statusBadge = String(myPred) === String(match.result)
                         ? `<span class="text-green-600 text-xs font-bold">✅ 猜中！</span>`
                         : `<span class="text-red-500 text-xs font-bold">❌ 沒中</span>`;
                 }
 
-                const isEliminationMatch = (parseInt(match.id) >= 74);
-
                 let middleAreaHtml = "";
-                if (hasScore) {
-                    const isDrawSelected = (myPred == 3);
+                if (match.hasScore) {
                     middleAreaHtml = `
                         <div class="flex flex-col items-center justify-center px-2">
                             <span class="text-sm font-extrabold bg-slate-100 text-slate-700 px-3 py-1 rounded-full border border-slate-200 shadow-inner">
                                 ${match.homeScore} - ${match.awayScore}
                             </span>
-                            ${!isEliminationMatch ? `<span class="text-[10px] mt-1 font-bold ${isDrawSelected ? 'text-slate-500 underline' : 'text-slate-300'}">投和</span>` : ''}
+                            ${!match.isElimination ? `<span class="text-[10px] mt-1 font-bold ${myPred == 3 ? 'text-slate-500 underline' : 'text-slate-300'}">投和</span>` : ''}
                         </div>
                     `;
                 } else {
-                    if (isEliminationMatch) {
-                        middleAreaHtml = `
-                            <div class="px-3 flex items-center justify-center">
-                                <span class="text-xs font-extrabold text-slate-400 italic tracking-wider bg-slate-100 px-2 py-1 rounded-md border border-slate-200">VS</span>
-                            </div>
-                        `;
-                    } else {
-                        middleAreaHtml = `
-                            <button onclick="savePredCloud('${match.id}', 3)" class="py-2 px-3 text-sm rounded-lg font-bold border transition-all ${myPred == 3 ? 'bg-slate-500 border-slate-500 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">和</button>
-                        `;
-                    }
+                    middleAreaHtml = match.isElimination
+                        ? `<div class="px-3 flex items-center justify-center"><span class="text-xs font-extrabold text-slate-400 italic tracking-wider bg-slate-100 px-2 py-1 rounded-md border border-slate-200">VS</span></div>`
+                        : `<button onclick="savePredCloud('${match.id}', 3)" class="py-2 px-3 text-sm rounded-lg font-bold border transition-all ${myPred == 3 ? 'bg-slate-500 border-slate-500 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">和</button>`;
                 }
 
-                const card = document.createElement('div');
-                card.className = "p-4 border border-slate-200 rounded-xl bg-white shadow-sm hover:shadow-md transition-shadow";
-                card.innerHTML = `
-                    <div class="flex justify-between items-center mb-3">
-                        <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded">${match.stage || '小組賽'}</span>
-                        <span class="text-[11px] text-slate-400 font-medium">場次 ${match.id} | ${formatChineseDateTimeWithWeek(match.time)}</span>
-                        ${statusBadge}
-                    </div>
-                    <div class="flex items-center justify-between gap-2">
-                        <button onclick="savePredCloud('${match.id}', 1)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border transition-all ${myPred == 1 ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.home}</button>
-                        ${middleAreaHtml}
-                        <button onclick="savePredCloud('${match.id}', 2)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border transition-all ${myPred == 2 ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.away}</button>
+                htmlBuffer += `
+                    <div class="p-4 border border-slate-200 rounded-xl bg-white shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded">${match.stage || '小組賽'}</span>
+                                <span class="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">猜中得 ${match.weightScore}分</span>
+                            </div>
+                            <span class="text-[11px] text-slate-400 font-medium">場次 ${match.id} | ${match.formattedTime}</span>
+                            ${statusBadge}
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <button onclick="savePredCloud('${match.id}', 1)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border transition-all ${myPred == 1 ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.home}</button>
+                            ${middleAreaHtml}
+                            <button onclick="savePredCloud('${match.id}', 2)" class="flex-1 py-2 px-1 text-sm rounded-lg font-bold border transition-all ${myPred == 2 ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}">${match.away}</button>
+                        </div>
                     </div>
                 `;
-                container.appendChild(card);
             });
+            container.innerHTML = htmlBuffer;
         }
 
         async function savePredCloud(matchId, choice) {
             const currentUser = document.getElementById('userSelect').value;
-            
-            const isConfirmed = confirm(`❓ 確定要以【 ${currentUser} 】的身分進行預測嗎？`);
-            if (!isConfirmed) return;
+            if (!confirm(`❓ 確定要以【 ${currentUser} 】的身分進行預測嗎？`)) return;
 
             showLoading(true);
             try {
                 const details = { 'user': currentUser, 'matchId': matchId, 'choice': choice };
-                const formBody = Object.keys(details)
-                                       .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(details[key]))
-                                       .join('&');
+                const formBody = Object.keys(details).map(key => encodeURIComponent(key) + '=' + encodeURIComponent(details[key])).join('&');
 
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
@@ -304,20 +277,16 @@
                 });
                 
                 const result = await response.json();
-                
                 if (result.status === "error") {
-                    alert(`🚨 儲存失敗：${result.message}`);
-                    loadCloudData();
+                    alert(`🚨 儲介失敗：${result.message}`);
                     return;
                 }
 
+                // 本地資料立即同步，不再無謂等待
                 if (!predictions[currentUser]) predictions[currentUser] = {};
                 predictions[currentUser][matchId] = choice;
                 renderMatches();
                 calculateScores();
-                
-                setTimeout(loadCloudData, 1000);
-
             } catch (error) {
                 alert("與雲端連線時發生錯誤，請重試！");
                 console.error(error);
@@ -330,41 +299,33 @@
 
         function calculateScores() {
             const leaderboardContainer = document.getElementById('leaderboard');
-            leaderboardContainer.innerHTML = '';
             
             const scores = users.map(user => {
-                let score = 0;
+                let totalScore = 0;
+                const userPreds = predictions[user] || {};
+                
                 matches.forEach(match => {
-                    const userPred = (predictions[user] && predictions[user][match.id]) ? predictions[user][match.id] : null;
-                    if (match.result !== undefined && match.result !== 0 && match.result !== "" && Number(userPred) === Number(match.result)) {
-                        score++;
+                    if (match.result && match.result != 0 && Number(userPreds[match.id]) === Number(match.result)) {
+                        totalScore += match.weightScore; // 直接讀取預算好的權重
                     }
                 });
-                return { name: user, score: score };
+                return { name: user, score: totalScore };
             });
 
-            scores.sort((a, b) => {
-                if (b.score !== a.score) return b.score - a.score;
-                return a.name.localeCompare(b.name, 'zh-Hant'); 
-            });
+            scores.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'zh-Hant'));
 
-            scores.forEach((s, index) => {
-                let rankBadge = `#${index + 1}`;
-                if (index === 0) rankBadge = "🥇";
-                if (index === 1) rankBadge = "🥈";
-                if (index === 2) rankBadge = "🥉";
-
-                const row = document.createElement('div');
-                row.className = `flex justify-between items-center text-sm p-1.5 rounded ${index === 0 ? 'bg-amber-50/70 border border-amber-100' : ''}`;
-                row.innerHTML = `
-                    <div class="flex items-center gap-2">
-                        <span class="w-6 h-6 flex items-center justify-center text-xs font-bold text-slate-500">${rankBadge}</span>
-                        <span class="font-bold ${index === 0 ? 'text-amber-700' : 'text-slate-700'}">${s.name}</span>
+            leaderboardContainer.innerHTML = scores.map((s, index) => {
+                const rankBadge = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`;
+                return `
+                    <div class="flex justify-between items-center text-sm p-1.5 rounded ${index === 0 ? 'bg-amber-50/70 border border-amber-100' : ''}">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 flex items-center justify-center text-xs font-bold text-slate-500">${rankBadge}</span>
+                            <span class="font-bold ${index === 0 ? 'text-amber-700' : 'text-slate-700'}">${s.name}</span>
+                        </div>
+                        <span class="${index === 0 ? 'text-amber-600' : 'text-blue-600'} font-bold">${s.score} 分</span>
                     </div>
-                    <span class="${index === 0 ? 'text-amber-600' : 'text-blue-600'} font-bold">${s.score} 分</span>
                 `;
-                leaderboardContainer.appendChild(row);
-            });
+            }).join('');
         }
 
         initUserSelect();
